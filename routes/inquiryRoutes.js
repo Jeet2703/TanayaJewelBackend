@@ -9,6 +9,9 @@ dotenv.config();
 router.post('/submit-inquiry', async (req, res) => {
   const inquiryData = req.body;
 
+  console.log("Inquiry Data:", inquiryData);
+  console.log("Email from .env:", process.env.EMAIL);
+
   const adminEmail = inquiryData.adminEmail || process.env.EMAIL; // Fallback to the default email in .env
 
   // Example check before sending the email
