@@ -9,6 +9,22 @@ dotenv.config();
 router.post('/submit-inquiry', async (req, res) => {
   const inquiryData = req.body;
 
+  const adminEmail = inquiryData.adminEmail || process.env.EMAIL; // Fallback to the default email in .env
+
+  // Example check before sending the email
+if (!inquiryData.adminEmail) {
+  return res.status(400).json({ message: 'Admin email is missing.' });
+}
+
+console.log("Admin Email:", inquiryData.adminEmail);
+
+console.log("Admin Email:", adminEmail);
+
+if (!adminEmail) {
+  return res.status(400).json({ message: 'Admin email is missing, unable to send email.' });
+}
+
+
   try {
     // Save inquiry to database
     const inquiry = new Inquiry(inquiryData);
@@ -44,7 +60,7 @@ router.post('/submit-inquiry', async (req, res) => {
     // Send email to admin
     await transporter.sendMail({
       from: process.env.EMAIL,
-      to: inquiryData.adminEmail, // Send to admin email
+      to: adminEmail, // Send to admin email
       subject: 'New Inquiry Received',
       text: emailContent,
     });

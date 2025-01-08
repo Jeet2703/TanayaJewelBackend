@@ -9,7 +9,9 @@ dotenv.config();
 connectDB();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: "https://tanayajewel.netlify.app/", // Replace with your Netlify URL
+  }));
 app.use(express.json());
 
 app.use('/api/admin', adminRoutes);
