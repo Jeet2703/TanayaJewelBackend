@@ -24,6 +24,7 @@ async function fetchCountryCodes() {
     return countries;
   } catch (error) {
     console.error('Error fetching country codes:', error.message);
+    console.error('Error stack:', error.stack);
     throw new Error('Failed to fetch country codes');
   }
 }
