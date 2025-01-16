@@ -1,10 +1,27 @@
 const express = require('express');
+const axios = require('axios'); // For making HTTP requests
 const router = express.Router();
-const Inquiry = require('../models/inquiry'); // Replace with your database model
+const Inquiry = require('../models/inquiry');
 const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
 
 dotenv.config();
+
+// Fetch country codes dynamically
+router.get('/country-codes', async (req, res) => {
+  try {
+    const response = await axios.get('https://restcountries.com/v3.1/all');
+    const countryCodes = response.data.map((country) => ({
+      name: country.name.common,
+      code: country.idd.root ? `${country.idd.root}${country.idd.suffixes ? country.idd.suffixes[0] : ''}` : '',
+    })).filter((country) => country.code); // Filter out countries without codes
+
+    res.status(200).json(countryCodes);
+  } catch (error) {
+    console.error('Error fetching country codes:', error);
+    res.status(500).json({ message: 'Failed to fetch country codes.' });
+  }
+});
 
 router.post('/submit-inquiry', async (req, res) => {
   const inquiryData = req.body;
@@ -41,7 +58,6 @@ if (!adminEmail) {
       Email: ${inquiryData.email}
       Country Code: ${inquiryData.countryCode}
       Phone: ${inquiryData.phone}
-      Price Range: ${inquiryData.priceRange}
       Category: ${inquiryData.category}
       Metal: ${inquiryData.metal}
       Carat: ${inquiryData.carat}

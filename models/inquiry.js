@@ -17,7 +17,7 @@ const inquirySchema = new mongoose.Schema({
     type: String,
     required: [true, 'Phone is required'],
   },
-  priceRange: String,
+  // priceRange: String,
   category: String,
   metal: String,
   carat: String,
