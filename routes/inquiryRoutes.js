@@ -10,7 +10,9 @@ dotenv.config();
 // Fetch country codes dynamically
 router.get('/country-codes', async (req, res) => {
   try {
-    const response = await axios.get('https://restcountries.com/v3.1/all');
+    const response = await axios.get('https://restcountries.com/v3.1/all', {
+      timeout: 10000, // 10 seconds
+    });
     const countryCodes = response.data.map((country) => ({
       name: country.name.common,
       code: country.idd.root ? `${country.idd.root}${country.idd.suffixes ? country.idd.suffixes[0] : ''}` : '',
