@@ -7,39 +7,25 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-let cachedCountryCodes = null; // In-memory cache
-let lastFetched = null; // Timestamp of the last fetch
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-
-// Fetch country codes from the external API
-async function fetchCountryCodes() {
-  try {
-    const response = await axios.get('https://restcountries.com/v3.1/all', { timeout: 20000 });
-    const countries = response.data.map((country) => ({
-      name: country.name.common,
-      code: country.idd.root
-        ? `${country.idd.root}${country.idd.suffixes ? country.idd.suffixes[0] : ''}`
-        : '',
-    }));
-    return countries;
-  } catch (error) {
-    console.error('Error fetching country codes:', error.message);
-    console.error('Error stack:', error.stack);
-    throw new Error('Failed to fetch country codes');
-  }
-}
-
 // Fetch country codes dynamically
 router.get('/country-codes', async (req, res) => {
   try {
-    // Refresh cache if it doesn't exist or is expired
-    if (!cachedCountryCodes || Date.now() - lastFetched > CACHE_DURATION) {
-      cachedCountryCodes = await fetchCountryCodes();
-      lastFetched = Date.now();
-    }
+    // Fetch country data from CountryLayer API
+    const response = await axios.get('https://api.countrylayer.com/v2/all', {
+      params: {
+        access_key: process.env.COUNTRY_LAYER_API_KEY,  // Fetch the API key from .env
+      },
+    });
 
-    res.json(cachedCountryCodes);
+    // Map response data to get country name and country code
+    const countryCodes = response.data.map((country) => ({
+      name: country.name,
+      code: country.callingCodes ? `+${country.callingCodes[0]}` : '',  // Format calling code with "+"
+    })).filter((country) => country.code);  // Filter out countries without a calling code
+
+    res.status(200).json(countryCodes);
   } catch (error) {
+    console.error('Error fetching country codes:', error);
     res.status(500).json({ message: 'Failed to fetch country codes.' });
   }
 });
