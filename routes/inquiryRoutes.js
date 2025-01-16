@@ -1,37 +1,10 @@
 const express = require('express');
-const axios = require('axios'); // For making HTTP requests
 const router = express.Router();
 const Inquiry = require('../models/inquiry');
 const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
-const path = require('path');
-const fs = require('fs');
 
 dotenv.config();
-
-// Fetch country codes dynamically
-const loadCountryCodes = () => {
-  try {
-    // Use __dirname to dynamically get the directory of the current file (inquireRoutes.js)
-    const filePath = path.join(__dirname, 'countryCodes.json');
-    const data = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error reading country codes file:', error);
-    return [];
-  }
-};
-
-// Fetch country codes from the file
-router.get('/country-codes', (req, res) => {
-  try {
-    const countryCodes = loadCountryCodes();
-    res.status(200).json(countryCodes);
-  } catch (error) {
-    console.error('Error fetching country codes:', error);
-    res.status(500).json({ message: 'Failed to fetch country codes.' });
-  }
-});
 
 router.post('/submit-inquiry', async (req, res) => {
   const inquiryData = req.body;
