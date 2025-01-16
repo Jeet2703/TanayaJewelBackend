@@ -14,7 +14,7 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 // Fetch country codes from the external API
 async function fetchCountryCodes() {
   try {
-    const response = await axios.get('https://restcountries.com/v3.1/all', { timeout: 10000 });
+    const response = await axios.get('https://restcountries.com/v3.1/all', { timeout: 20000 });
     const countries = response.data.map((country) => ({
       name: country.name.common,
       code: country.idd.root
