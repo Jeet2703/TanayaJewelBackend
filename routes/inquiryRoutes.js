@@ -4,25 +4,28 @@ const router = express.Router();
 const Inquiry = require('../models/inquiry');
 const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
+const path = require('path');
+const fs = require('fs');
 
 dotenv.config();
 
 // Fetch country codes dynamically
-router.get('/country-codes', async (req, res) => {
+const loadCountryCodes = () => {
   try {
-    // Fetch country data from CountryLayer API
-    const response = await axios.get('https://api.countrylayer.com/v2/all', {
-      params: {
-        access_key: process.env.COUNTRY_LAYER_API_KEY,  // Fetch the API key from .env
-      },
-    });
+    // Use __dirname to dynamically get the directory of the current file (inquireRoutes.js)
+    const filePath = path.join(__dirname, 'countryCodes.json');
+    const data = fs.readFileSync(filePath, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading country codes file:', error);
+    return [];
+  }
+};
 
-    // Map response data to get country name and country code
-    const countryCodes = response.data.map((country) => ({
-      name: country.name,
-      code: country.callingCodes ? `+${country.callingCodes[0]}` : '',  // Format calling code with "+"
-    })).filter((country) => country.code);  // Filter out countries without a calling code
-
+// Fetch country codes from the file
+router.get('/country-codes', (req, res) => {
+  try {
+    const countryCodes = loadCountryCodes();
     res.status(200).json(countryCodes);
   } catch (error) {
     console.error('Error fetching country codes:', error);
