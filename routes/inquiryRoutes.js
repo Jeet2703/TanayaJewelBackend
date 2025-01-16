@@ -7,20 +7,38 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+let cachedCountryCodes = null; // In-memory cache
+let lastFetched = null; // Timestamp of the last fetch
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+// Fetch country codes from the external API
+async function fetchCountryCodes() {
+  try {
+    const response = await axios.get('https://restcountries.com/v3.1/all', { timeout: 10000 });
+    const countries = response.data.map((country) => ({
+      name: country.name.common,
+      code: country.idd.root
+        ? `${country.idd.root}${country.idd.suffixes ? country.idd.suffixes[0] : ''}`
+        : '',
+    }));
+    return countries;
+  } catch (error) {
+    console.error('Error fetching country codes:', error.message);
+    throw new Error('Failed to fetch country codes');
+  }
+}
+
 // Fetch country codes dynamically
 router.get('/country-codes', async (req, res) => {
   try {
-    const response = await axios.get('https://restcountries.com/v3.1/all', {
-      timeout: 10000, // 10 seconds
-    });
-    const countryCodes = response.data.map((country) => ({
-      name: country.name.common,
-      code: country.idd.root ? `${country.idd.root}${country.idd.suffixes ? country.idd.suffixes[0] : ''}` : '',
-    })).filter((country) => country.code); // Filter out countries without codes
+    // Refresh cache if it doesn't exist or is expired
+    if (!cachedCountryCodes || Date.now() - lastFetched > CACHE_DURATION) {
+      cachedCountryCodes = await fetchCountryCodes();
+      lastFetched = Date.now();
+    }
 
-    res.status(200).json(countryCodes);
+    res.json(cachedCountryCodes);
   } catch (error) {
-    console.error('Error fetching country codes:', error);
     res.status(500).json({ message: 'Failed to fetch country codes.' });
   }
 });
