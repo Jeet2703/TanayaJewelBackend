@@ -1,34 +1,26 @@
-const express = require("express");
-const multer = require("multer");
-const Product = require("../models/products");
-const nodemailer = require("nodemailer");
-
+const express = require('express');
 const router = express.Router();
+const Product = require('../models/products');
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`),
-});
-
-const upload = multer({ storage });
-
-router.post("/add-product", upload.single("image"), async (req, res) => {
+// Add a new product (Admin only)
+router.post('/add', async (req, res) => {
   try {
-    const { name, price, color, quantity } = req.body;
-    const product = new Product({ name, price, color, quantity, image: req.file.path });
-    await product.save();
-    res.status(200).json({ success: true, message: "Product added successfully!" });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Failed to add product" });
+    const { name, carat, color, clarity, cut, finish, fluorescence, price, stock } = req.body;
+    const newProduct = new Product({ name, carat, color, clarity, cut, finish, fluorescence, price, stock });
+    await newProduct.save();
+    res.status(201).json({ message: 'Product added successfully!' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-router.get("/get-products", async (req, res) => {
+// Get all products (User side)
+router.get('/', async (req, res) => {
   try {
     const products = await Product.find();
-    res.status(200).json({ success: true, products });
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Failed to fetch products" });
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

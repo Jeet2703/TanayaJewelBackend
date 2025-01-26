@@ -12,6 +12,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get("/ping", (req, res) => {
+    res.send({ message: "pong" });
+});
+
 app.use('/api/admin', adminRoutes);
 app.use('/api/inquiry', inquiryRoutes);
 
