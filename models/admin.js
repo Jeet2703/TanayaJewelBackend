@@ -1,15 +1,30 @@
 const mongoose = require('mongoose');
 
 const productSchema = new mongoose.Schema({
-  category: { type: String, required: true },
-  value: { type: String, required: true },
+  Shape: { type: String,  },
+  'Certificate No': { type: String,  },
+  Carat: { type: Number,  },
+  Color: { type: String,  },
+  Clarity: { type: String,  },
+  Cut: { type: String,  },
+  Polish: { type: String,  },
+  Symmetry: { type: String,  },
+  '3EX': { type: String,  },
+  HA: { type: String,  },
+  Fluorescence: { type: String,  },
+  Length: { type: Number,  },
+  Breadth: { type: Number,  },
+  Height: { type: Number,  },
+  LAB: { type: String,  },
+  'Price/ct': { type: Number,  },
+  Amount: { type: Number,  },
 });
 
 const adminSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true },
+    name: { type: String,  },
     email: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
+    password: { type: String,  },
     products: [productSchema], // Embedded product schema
   },
   { timestamps: true }
