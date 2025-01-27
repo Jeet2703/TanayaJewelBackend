@@ -1,27 +1,147 @@
 const express = require('express');
 const router = express.Router();
-const Product = require('../models/products');
+const Product = require('../models/products'); // Assuming Product model is correctly defined
+const mongoose = require('mongoose');
 
-// Add a new product (Admin only)
-router.post('/add', async (req, res) => {
+// Add Product - Admin only
+router.post('/add-product', async (req, res) => {
   try {
-    const { name, carat, color, clarity, cut, finish, fluorescence, price, stock } = req.body;
-    const newProduct = new Product({ name, carat, color, clarity, cut, finish, fluorescence, price, stock });
-    await newProduct.save();
-    res.status(201).json({ message: 'Product added successfully!' });
+    const { products, adminId } = req.body; // Assuming adminId is passed in the body
+    console.log("Received Payload:", products);
+
+    // Validate that adminId is provided
+    if (!adminId) {
+      return res.status(400).json({ message: 'Admin ID is required' });
+    }
+
+    // Validate that products is an array
+    if (!Array.isArray(products)) {
+      return res.status(400).json({ message: 'Products must be an array' });
+    }
+
+    // Add adminId to each product before saving to the Product collection
+    products.forEach(product => {
+      product.adminId = adminId;
+    });
+
+    // Insert the products into the Product collection
+    await Product.insertMany(products);
+
+    res.status(200).json({ message: 'Products added successfully!' });
   } catch (error) {
+    console.error("Error in Add Product Route:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get all products (User side)
-router.get('/', async (req, res) => {
+// Fetch Products - Public access (no admin rights needed)
+router.get('/products', async (req, res) => {
   try {
-    const products = await Product.find();
-    res.json(products);
+    const filters = req.query; // Get filters from the query string
+    const query = {}; // Initialize the query object for MongoDB
+
+    // Loop through the filters and add to the query if a filter is selected
+    Object.keys(filters).forEach((filterKey) => {
+      if (filters[filterKey].length > 0) {
+        // Make sure the filter value is an array (multiple selections allowed)
+        query[filterKey] = { $in: filters[filterKey].split(',') }; // MongoDB query for multiple values
+      }
+    });
+
+    // Fetch filtered products
+    const products = await Product.find(query);
+
+    // Return filtered products
+    if (products.length > 0) {
+      res.status(200).json({ products });
+    } else {
+      res.status(404).json({ message: "No products found matching the selected filters." });
+    }
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: error.message });
   }
 });
+
+// Edit Product - Admin only
+router.put('/edit-product/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params; // Get the product ID from the URL params
+    const { product, adminId } = req.body; // Extract updated product and adminId from the request body
+
+    // Validate that adminId is provided
+    if (!adminId) {
+      return res.status(400).json({ message: 'Admin ID is required' });
+    }
+
+    if (!product || !productId) return res.status(400).json({ message: 'Product data and product ID are required' });
+
+    // Ensure productId is a valid ObjectId
+    console.log('Received productId:', productId); // Debugging line
+if (!mongoose.Types.ObjectId.isValid(productId)) {
+  return res.status(400).json({ message: 'Invalid product ID' });
+}
+
+
+    // Find the product by ID and ensure it's associated with the correct admin
+    const existingProduct = await Product.findById(productId);
+    if (!existingProduct) return res.status(404).json({ message: 'Product not found' });
+
+    // Check if the current admin is the one who created this product
+    // if (existingProduct.adminId.toString() !== adminId) {
+    //   return res.status(403).json({ message: 'You do not have permission to edit this product' });
+    // }
+
+    // Validate numeric fields (as an example, adapt according to your schema)
+    const numericFields = ['Carat', 'Length', 'Breadth', 'Height', 'Price/ct', 'Amount'];
+    for (const field of numericFields) {
+      if (isNaN(product[field])) {
+        return res.status(400).json({ message: `Invalid value for ${field}. Must be a number.` });
+      }
+    }
+
+    // Update the product with new data
+    Object.assign(existingProduct, product);
+    await existingProduct.save();
+
+    res.status(200).json({ message: 'Product updated successfully!', product: existingProduct });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Failed to update product', error: error.message });
+  }
+});
+
+
+// Delete Product - Admin only
+router.delete('/delete-product/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params; // Use product ID as identifier
+    const { adminId } = req.query; // Get adminId from query string
+
+    // Validate that adminId is provided
+    if (!adminId) {
+      return res.status(400).json({ message: 'Admin ID is required' });
+    }
+
+    // Find the product by ID
+    const existingProduct = await Product.findById(productId);
+    if (!existingProduct) return res.status(404).json({ message: 'Product not found' });
+
+    // Ensure the product is associated with the admin who is trying to delete it
+    // if (existingProduct.adminId.toString() !== adminId) {
+    //   return res.status(403).json({ message: 'You do not have permission to delete this product' });
+    // }
+
+    // Delete the product
+    await Product.findByIdAndDelete(productId);
+
+    res.status(200).json({ message: 'Product deleted successfully!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 
 module.exports = router;
