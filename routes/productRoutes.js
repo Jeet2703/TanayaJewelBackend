@@ -34,34 +34,67 @@ router.post('/add-product', async (req, res) => {
   }
 });
 
-// Fetch Products - Public access (no admin rights needed)
-router.get('/products', async (req, res) => {
+router.get('/products-details', async (req, res) => {
   try {
-    const filters = req.query; // Get filters from the query string
-    const query = {}; // Initialize the query object for MongoDB
-
-    // Loop through the filters and add to the query if a filter is selected
-    Object.keys(filters).forEach((filterKey) => {
-      if (filters[filterKey].length > 0) {
-        // Make sure the filter value is an array (multiple selections allowed)
-        query[filterKey] = { $in: filters[filterKey].split(',') }; // MongoDB query for multiple values
-      }
-    });
-
-    // Fetch filtered products
-    const products = await Product.find(query);
-
-    // Return filtered products
-    if (products.length > 0) {
-      res.status(200).json({ products });
-    } else {
-      res.status(404).json({ message: "No products found matching the selected filters." });
-    }
+    const products = await Product.find(); // Fetch all products in the Product collection
+    res.status(200).json({ products });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
   }
 });
+
+// Fetch Products - Public access (no admin rights needed)
+router.get('/products', async (req, res) => {
+  try {
+    const query = {};
+    const filters = req.query;
+
+    // Map lowercase filter keys to schema field names
+    const fieldMapping = {
+      shape: "Shape",
+      carat: "Carat",
+      color: "Color",
+      clarity: "Clarity",
+      cut: "Cut",
+      polish: "Polish",
+      symmetry: "Symmetry",
+      fluorescence: "Fluorescence",
+      lab: "LAB",
+      bgm: "3EX",
+      handa: "HA",
+    };
+
+    // Construct the query object dynamically for partial matching
+    const orFilters = Object.keys(filters).reduce((acc, filterKey) => {
+      const mappedField = fieldMapping[filterKey.toLowerCase()]; // Case-insensitive mapping
+      if (mappedField && filters[filterKey]) {
+        const values = filters[filterKey].split(","); // Split comma-separated values
+        acc.push({ [mappedField]: { $in: values } });
+      }
+      return acc;
+    }, []);
+
+    // Debug: Check the constructed $or query
+    console.log("Constructed $or Query:", JSON.stringify(orFilters, null, 2));
+
+    // Fetch products matching any of the filters
+    const products = await Product.find(orFilters.length > 0 ? { $or: orFilters } : {});
+
+    // Respond with the products or a no-products-found message
+    if (products.length > 0) {
+      return res.status(200).json({ products });
+    } else {
+      return res.status(404).json({ message: "No products found matching the selected filters." });
+    }
+  } catch (error) {
+    console.error("Error in fetching products:", error);
+    return res.status(500).json({ message: "Internal server error.", error: error.message });
+  }
+});
+
+
+
 
 // Edit Product - Admin only
 router.put('/edit-product/:productId', async (req, res) => {
