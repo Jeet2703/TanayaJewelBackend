@@ -45,12 +45,12 @@ router.get('/products-details', async (req, res) => {
 });
 
 // Fetch Products - Public access (no admin rights needed)
-router.get('/products', async (req, res) => {
+router.get("/products", async (req, res) => {
   try {
     const query = {};
     const filters = req.query;
 
-    // Map lowercase filter keys to schema field names
+    // Map filter keys to schema fields
     const fieldMapping = {
       shape: "Shape",
       carat: "Carat",
@@ -61,13 +61,14 @@ router.get('/products', async (req, res) => {
       symmetry: "Symmetry",
       fluorescence: "Fluorescence",
       lab: "LAB",
-      bgm: "3EX",
-      handa: "HA",
+      bgm: "BGM",
+      handa: "HA", // Corrected mapping
+      "3ex": "3EX",
     };
 
-    // Construct the query object dynamically for partial matching
+    // Construct the query object dynamically
     const orFilters = Object.keys(filters).reduce((acc, filterKey) => {
-      const mappedField = fieldMapping[filterKey.toLowerCase()]; // Case-insensitive mapping
+      const mappedField = fieldMapping[filterKey.toLowerCase()];
       if (mappedField && filters[filterKey]) {
         const values = filters[filterKey].split(","); // Split comma-separated values
         acc.push({ [mappedField]: { $in: values } });
@@ -75,25 +76,44 @@ router.get('/products', async (req, res) => {
       return acc;
     }, []);
 
-    // Debug: Check the constructed $or query
-    console.log("Constructed $or Query:", JSON.stringify(orFilters, null, 2));
+    // Fetch products
+    const products = await Product.find(orFilters.length > 0 ? { $or: orFilters } : {}).lean();
 
-    // Fetch products matching any of the filters
-    const products = await Product.find(orFilters.length > 0 ? { $or: orFilters } : {});
-
-    // Respond with the products or a no-products-found message
-    if (products.length > 0) {
-      return res.status(200).json({ products });
-    } else {
+    if (products.length === 0) {
       return res.status(404).json({ message: "No products found matching the selected filters." });
     }
+
+    // Define the shape priority order
+    const shapePriority = [
+      "BR", "MQ", "PS", "OV", "EM", "HS", "PR", "BGT", "RAD", "CU", "TRI", "OTH",
+    ];
+
+    // Custom sort logic
+    const sortedProducts = products.sort((a, b) => {
+      // Sort by Carat (ascending)
+      if (a.Carat !== b.Carat) {
+        return a.Carat - b.Carat;
+      }
+
+      // Sort by Shape based on priority order
+      const shapeAIndex = shapePriority.indexOf(a.Shape) >= 0 ? shapePriority.indexOf(a.Shape) : shapePriority.length;
+      const shapeBIndex = shapePriority.indexOf(b.Shape) >= 0 ? shapePriority.indexOf(b.Shape) : shapePriority.length;
+
+      if (shapeAIndex !== shapeBIndex) {
+        return shapeAIndex - shapeBIndex;
+      }
+
+      // Additional sorting criteria can be added here if needed
+      return 0;
+    });
+
+    // Return the sorted products
+    return res.status(200).json({ products: sortedProducts });
   } catch (error) {
     console.error("Error in fetching products:", error);
     return res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 });
-
-
 
 
 // Edit Product - Admin only

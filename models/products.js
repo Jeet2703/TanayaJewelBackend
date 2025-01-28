@@ -11,6 +11,7 @@ const productSchema = new mongoose.Schema({
   Symmetry: { type: String },
   '3EX': { type: String },
   HA: { type: String },
+  BGM: {type: String},
   Fluorescence: { type: String },
   Length: { type: Number },
   Breadth: { type: Number },
