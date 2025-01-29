@@ -68,7 +68,7 @@ router.get("/products", async (req, res) => {
       fluorescence: "Fluorescence",
       lab: "LAB",
       bgm: "BGM",
-      HAndA: "HA",  // Fix frontend-to-backend mapping
+      HAndC: "HC",  // Fix frontend-to-backend mapping
       "3EX": "3EX",  // Fix frontend-to-backend mapping
     };
 
@@ -81,7 +81,7 @@ router.get("/products", async (req, res) => {
       const filterValue = filters[filterKey];
 
       // ✅ Special handling for empty BGM, H&A, 3EX
-      if (["BGM", "HA", "3EX"].includes(mappedField)) {
+      if (["BGM", "HC", "3EX"].includes(mappedField)) {
         if (filterValue === "") {
           andFilters.push({
             $or: [
@@ -153,7 +153,7 @@ if (!mongoose.Types.ObjectId.isValid(productId)) {
 
     // Validate numeric fields (as an example, adapt according to your schema)
     const numericFields = ['Carat', 'Length', 'Breadth', 'Height', 'Price/ct', 'Amount'];
-const optionalFields = ['BGM', 'HA', '3EX'];
+const optionalFields = ['BGM', 'HC', '3EX'];
 
 for (const field of numericFields) {
     if (product[field] === undefined || isNaN(product[field])) {
