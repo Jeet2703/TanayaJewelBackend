@@ -47,10 +47,16 @@ router.get('/products-details', async (req, res) => {
 // Fetch Products - Public access (no admin rights needed)
 router.get("/products", async (req, res) => {
   try {
-    const query = {};
-    const filters = req.query;
+    console.log("Received filters:", req.query);
 
-    // Map filter keys to schema fields
+    const query = {};
+    const filters = Object.keys(req.query).reduce((acc, key) => {
+      acc[key] = decodeURIComponent(req.query[key]); // Decode encoded values (fixes "H&A")
+      return acc;
+    }, {});
+    
+
+    // Mapping frontend filter keys to database fields
     const fieldMapping = {
       shape: "Shape",
       carat: "Carat",
@@ -62,58 +68,58 @@ router.get("/products", async (req, res) => {
       fluorescence: "Fluorescence",
       lab: "LAB",
       bgm: "BGM",
-      handa: "HA", // Corrected mapping
-      "3ex": "3EX",
+      HAndA: "HA",  // Fix frontend-to-backend mapping
+      "3EX": "3EX",  // Fix frontend-to-backend mapping
     };
 
-    // Construct the query object dynamically
-    const orFilters = Object.keys(filters).reduce((acc, filterKey) => {
-      const mappedField = fieldMapping[filterKey.toLowerCase()];
-      if (mappedField && filters[filterKey]) {
-        const values = filters[filterKey].split(","); // Split comma-separated values
-        acc.push({ [mappedField]: { $in: values } });
+    const andFilters = [];
+
+    Object.keys(filters).forEach((filterKey) => {
+      const mappedField = fieldMapping[filterKey];
+      if (!mappedField) return;
+
+      const filterValue = filters[filterKey];
+
+      // ✅ Special handling for empty BGM, H&A, 3EX
+      if (["BGM", "HA", "3EX"].includes(mappedField)) {
+        if (filterValue === "") {
+          andFilters.push({
+            $or: [
+              { [mappedField]: { $exists: false } }, // Field does not exist
+              { [mappedField]: { $eq: "" } },       // Field is empty string
+              { [mappedField]: null },              // Field is null
+            ],
+          });
+        } else {
+          andFilters.push({ [mappedField]: { $in: filterValue.split(",") } });
+        }
+      } 
+      // ✅ Normal case for other filters
+      else if (filterValue) {
+        andFilters.push({ [mappedField]: { $in: filterValue.split(",") } });
       }
-      return acc;
-    }, []);
-
-    // Fetch products
-    const products = await Product.find(orFilters.length > 0 ? { $or: orFilters } : {}).lean();
-
-    if (products.length === 0) {
-      return res.status(404).json({ message: "No products found matching the selected filters." });
-    }
-
-    // Define the shape priority order
-    const shapePriority = [
-      "BR", "MQ", "PS", "OV", "EM", "HS", "PR", "BGT", "RAD", "CU", "TRI", "OTH",
-    ];
-
-    // Custom sort logic
-    const sortedProducts = products.sort((a, b) => {
-      // Sort by Carat (ascending)
-      if (a.Carat !== b.Carat) {
-        return a.Carat - b.Carat;
-      }
-
-      // Sort by Shape based on priority order
-      const shapeAIndex = shapePriority.indexOf(a.Shape) >= 0 ? shapePriority.indexOf(a.Shape) : shapePriority.length;
-      const shapeBIndex = shapePriority.indexOf(b.Shape) >= 0 ? shapePriority.indexOf(b.Shape) : shapePriority.length;
-
-      if (shapeAIndex !== shapeBIndex) {
-        return shapeAIndex - shapeBIndex;
-      }
-
-      // Additional sorting criteria can be added here if needed
-      return 0;
     });
 
-    // Return the sorted products
-    return res.status(200).json({ products: sortedProducts });
+    console.log("Generated query:", JSON.stringify(andFilters, null, 2));
+
+    // ✅ Fix: Use $or to allow some filters to match even if others do not exist
+    const products = await Product.find({ $or: andFilters }).lean();
+
+    console.log("Fetched Products:", products.length);
+
+    if (products.length === 0) {
+      return res.status(200).json({ message: "No exact match found, showing partial matches.", products: [] });
+    }
+
+    return res.status(200).json({ products });
   } catch (error) {
     console.error("Error in fetching products:", error);
     return res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 });
+
+
+
 
 
 // Edit Product - Admin only
@@ -147,11 +153,21 @@ if (!mongoose.Types.ObjectId.isValid(productId)) {
 
     // Validate numeric fields (as an example, adapt according to your schema)
     const numericFields = ['Carat', 'Length', 'Breadth', 'Height', 'Price/ct', 'Amount'];
-    for (const field of numericFields) {
-      if (isNaN(product[field])) {
+const optionalFields = ['BGM', 'HA', '3EX'];
+
+for (const field of numericFields) {
+    if (product[field] === undefined || isNaN(product[field])) {
         return res.status(400).json({ message: `Invalid value for ${field}. Must be a number.` });
-      }
     }
+}
+
+// Ensure optional fields can be empty
+optionalFields.forEach(field => {
+    if (!product[field]) {
+        product[field] = "";
+    }
+});
+
 
     // Update the product with new data
     Object.assign(existingProduct, product);
