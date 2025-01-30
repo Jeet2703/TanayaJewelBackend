@@ -36,13 +36,30 @@ router.post('/add-product', async (req, res) => {
 
 router.get('/products-details', async (req, res) => {
   try {
-    const products = await Product.find(); // Fetch all products in the Product collection
-    res.status(200).json({ products });
+    let { page = 1, limit = 20 } = req.query;
+    page = parseInt(page);
+    limit = parseInt(limit);
+    
+    const skip = (page - 1) * limit;
+
+    // Fetch paginated products
+    const products = await Product.find().skip(skip).limit(limit);
+    
+    // Get total count of products
+    const totalProducts = await Product.countDocuments();
+
+    res.status(200).json({ 
+      products, 
+      totalProducts, 
+      totalPages: Math.ceil(totalProducts / limit), 
+      currentPage: page 
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Fetch Products - Public access (no admin rights needed)
 router.get("/products", async (req, res) => {
@@ -210,6 +227,30 @@ router.delete('/delete-product/:productId', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+router.delete('/delete-products', async (req, res) => {
+  try {
+    const { productIds } = req.body; // Expect an array of product IDs
+    const { adminId } = req.query; // Get adminId from query string
+
+    if (!adminId) {
+      return res.status(400).json({ message: 'Admin ID is required' });
+    }
+
+    if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
+      return res.status(400).json({ message: 'No products selected for deletion' });
+    }
+
+    // Find and delete products associated with the admin
+    const result = await Product.deleteMany({ _id: { $in: productIds } });
+
+    res.status(200).json({ message: `${result.deletedCount} products deleted successfully!` });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 
 
