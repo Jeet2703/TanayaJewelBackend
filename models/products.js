@@ -10,7 +10,7 @@ const productSchema = new mongoose.Schema({
   Polish: { type: String },
   Symmetry: { type: String },
   '3EX': { type: String },
-  HC: { type: String },
+  'H&C': { type: String },
   BGM: {type: String},
   Fluorescence: { type: String },
   Length: { type: Number },
