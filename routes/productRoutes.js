@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Product = require('../models/products'); // Assuming Product model is correctly defined
 const mongoose = require('mongoose');
+const xlsx = require('xlsx');
 
 // Add Product - Admin only
 router.post('/add-product', async (req, res) => {
@@ -199,34 +200,34 @@ optionalFields.forEach(field => {
 
 
 // Delete Product - Admin only
-router.delete('/delete-product/:productId', async (req, res) => {
-  try {
-    const { productId } = req.params; // Use product ID as identifier
-    const { adminId } = req.query; // Get adminId from query string
+// router.delete('/delete-product/:productId', async (req, res) => {
+//   try {
+//     const { productId } = req.params; // Use product ID as identifier
+//     const { adminId } = req.query; // Get adminId from query string
 
-    // Validate that adminId is provided
-    if (!adminId) {
-      return res.status(400).json({ message: 'Admin ID is required' });
-    }
+//     // Validate that adminId is provided
+//     if (!adminId) {
+//       return res.status(400).json({ message: 'Admin ID is required' });
+//     }
 
-    // Find the product by ID
-    const existingProduct = await Product.findById(productId);
-    if (!existingProduct) return res.status(404).json({ message: 'Product not found' });
+//     // Find the product by ID
+//     const existingProduct = await Product.findById(productId);
+//     if (!existingProduct) return res.status(404).json({ message: 'Product not found' });
 
-    // Ensure the product is associated with the admin who is trying to delete it
-    // if (existingProduct.adminId.toString() !== adminId) {
-    //   return res.status(403).json({ message: 'You do not have permission to delete this product' });
-    // }
+//     // Ensure the product is associated with the admin who is trying to delete it
+//     // if (existingProduct.adminId.toString() !== adminId) {
+//     //   return res.status(403).json({ message: 'You do not have permission to delete this product' });
+//     // }
 
-    // Delete the product
-    await Product.findByIdAndDelete(productId);
+//     // Delete the product
+//     await Product.findByIdAndDelete(productId);
 
-    res.status(200).json({ message: 'Product deleted successfully!' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
-  }
-});
+//     res.status(200).json({ message: 'Product deleted successfully!' });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ error: error.message });
+//   }
+// });
 
 router.delete('/delete-products', async (req, res) => {
   try {
@@ -248,6 +249,29 @@ router.delete('/delete-products', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/delete-products-excel', async (req, res) => {
+  try {
+      const { certificateNumbers } = req.body; 
+
+      if (!certificateNumbers || !Array.isArray(certificateNumbers) || certificateNumbers.length === 0) {
+          return res.status(400).json({ message: "No valid Certificate No found for deletion", deletedCount: 0 });
+      }
+
+      // Delete products matching Certificate No
+      const result = await Product.deleteMany({ "Certificate No": { $in: certificateNumbers } });
+
+      if (result.deletedCount === 0) {
+          return res.status(404).json({ message: "Data is not present", deletedCount: 0 });
+      }
+
+      res.status(200).json({ message: `${result.deletedCount} products deleted successfully!`, deletedCount: result.deletedCount });
+
+  } catch (error) {
+      console.error("Error in deleting products:", error);
+      res.status(500).json({ message: "Internal server error.", error: error.message, deletedCount: 0 });
   }
 });
 
