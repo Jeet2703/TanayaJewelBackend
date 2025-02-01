@@ -11,7 +11,7 @@ connectDB();
 
 const app = express();
 app.use(cors({
-  origin: ['https://www.tanayajewel.com', 'http://localhost:3000']
+  origin: ['https://www.tanayajewel.com', 'http://localhost:3000', 'www.tanayajewel.com', 'https://tanayajewel.com']
 }));
 app.use(express.json());
 
