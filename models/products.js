@@ -11,12 +11,12 @@ const productSchema = new mongoose.Schema({
   Symmetry: { type: String },
   '3EX': { type: String },
   'H&C': { type: String },
-  BGM: {type: String},
   Fluorescence: { type: String },
   Length: { type: Number },
   Breadth: { type: Number },
   Height: { type: Number },
   LAB: { type: String },
+  BGM: {type: String},
   'Price/ct': { type: Number },
   Amount: { type: Number },
 });

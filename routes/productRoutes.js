@@ -40,20 +40,20 @@ router.get('/products-details', async (req, res) => {
     let { page = 1, limit = 20 } = req.query;
     page = parseInt(page);
     limit = parseInt(limit);
-    
+
     const skip = (page - 1) * limit;
 
     // Fetch paginated products
     const products = await Product.find().skip(skip).limit(limit);
-    
+
     // Get total count of products
     const totalProducts = await Product.countDocuments();
 
-    res.status(200).json({ 
-      products, 
-      totalProducts, 
-      totalPages: Math.ceil(totalProducts / limit), 
-      currentPage: page 
+    res.status(200).json({
+      products,
+      totalProducts,
+      totalPages: Math.ceil(totalProducts / limit),
+      currentPage: page
     });
   } catch (error) {
     console.error(error);
@@ -61,20 +61,15 @@ router.get('/products-details', async (req, res) => {
   }
 });
 
-
-// Fetch Products - Public access (no admin rights needed)
 router.get("/products", async (req, res) => {
   try {
     console.log("Received filters:", req.query);
 
-    const query = {};
     const filters = Object.keys(req.query).reduce((acc, key) => {
-      acc[key] = decodeURIComponent(req.query[key]); // Decode encoded values (fixes "H&A")
+      acc[key] = decodeURIComponent(req.query[key]);
       return acc;
     }, {});
-    
 
-    // Mapping frontend filter keys to database fields
     const fieldMapping = {
       shape: "Shape",
       carat: "Carat",
@@ -86,55 +81,187 @@ router.get("/products", async (req, res) => {
       fluorescence: "Fluorescence",
       lab: "LAB",
       bgm: "BGM",
-      HAndC: "H&C",  // Fix frontend-to-backend mapping
-      "3EX": "3EX",  // Fix frontend-to-backend mapping
+      HAndC: "H&C",
+      "3EX": "3EX",
     };
 
-    const andFilters = [];
+    let matchedFilters = {};
+    let unmatchedFilters = {};
+    let matchedProductIds = new Set();
 
-    Object.keys(filters).forEach((filterKey) => {
-      const mappedField = fieldMapping[filterKey];
-      if (!mappedField) return;
+    // === STEP 1: SHAPE FILTERING ===
+    if (filters.shape) {
+      const shapeValues = filters.shape.split(",");
+      console.log(`Checking shape: ${shapeValues}`);
 
-      const filterValue = filters[filterKey];
+      const shapeMatchedProducts = await Product.find({
+        Shape: { $in: shapeValues }
+      }).lean();
 
-      // ✅ Special handling for empty BGM, H&A, 3EX
-      if (["BGM", "H&C", "3EX"].includes(mappedField)) {
-        if (filterValue === "") {
-          andFilters.push({
-            $or: [
-              { [mappedField]: { $exists: false } }, // Field does not exist
-              { [mappedField]: { $eq: "" } },       // Field is empty string
-              { [mappedField]: null },              // Field is null
-            ],
-          });
-        } else {
-          andFilters.push({ [mappedField]: { $in: filterValue.split(",") } });
-        }
-      } 
-      // ✅ Normal case for other filters
-      else if (filterValue) {
-        andFilters.push({ [mappedField]: { $in: filterValue.split(",") } });
+      if (shapeMatchedProducts.length === 0) {
+        return res.status(200).json({
+          products: [],
+          message: "No products found for the selected shape.",
+          matchedFilters: {},
+          unmatchedFilters: { shape: shapeValues }
+        });
       }
-    });
 
-    console.log("Generated query:", JSON.stringify(andFilters, null, 2));
+      const uniqueShapesInData = [...new Set(shapeMatchedProducts.map(p => p.Shape))];
+      matchedFilters.shape = uniqueShapesInData.length === 1 ? [uniqueShapesInData[0]] : uniqueShapesInData;
+      matchedProductIds = new Set(shapeMatchedProducts.map(p => p._id));
 
-    // ✅ Fix: Use $or to allow some filters to match even if others do not exist
-    const products = await Product.find({ $or: andFilters }).lean();
-
-    console.log("Fetched Products:", products.length);
-
-    if (products.length === 0) {
-      return res.status(200).json({ message: "No exact match found, showing partial matches.", products: [] });
+      console.log("Matched shapes:", matchedFilters.shape);
     }
 
-    return res.status(200).json({ products });
+    // === STEP 2: CARAT FILTERING (WITH RANGES) ===
+    // === STEP 2: CARAT FILTERING ===
+    if (filters.carat) {
+      const caratValues = filters.carat.split(",");
+      console.log(`Checking carat: ${caratValues}`);
+    
+      // Define carat ranges based on your provided data
+      const caratRanges = {
+        '0.1': [0.1, 0.1499],
+        '0.15': [0.15, 0.1999],
+        '0.2': [0.2, 0.2499],
+        '0.25': [0.25, 0.2999],
+        '0.3': [0.3, 0.3999],
+        '0.4': [0.4, 0.4999],
+        '0.5': [0.5, 0.5999],
+        '0.6': [0.6, 0.6999],
+        '0.7': [0.7, 0.7999],
+        '0.8': [0.8, 0.8999],
+        '0.9': [0.9, 0.9999],
+        '1': [1, 1.9999],
+        '2': [2, 2.9999],
+        '3': [3, 3.9999],
+        '4': [4, 4.9999],
+        '5': [5, 5.9999],
+        '10': [10, 10.9999],
+      };
+    
+      // Create carat range conditions based on the selected carats
+      const caratConditions = caratValues.flatMap(value => {
+        const range = caratRanges[value];
+        if (range) {
+          return { Carat: { $gte: range[0], $lt: range[1] } };
+        }
+        return [];
+      });
+    
+      if (caratConditions.length === 0) {
+        return res.status(200).json({
+          products: [],
+          message: "No products found for the selected carat.",
+          matchedFilters,
+          unmatchedFilters: { carat: caratValues }
+        });
+      }
+    
+      // Find all products that match the selected carat ranges
+      const caratMatchedProducts = await Product.find({
+        _id: { $in: [...matchedProductIds] }, // Only check previously matched shapes
+        $or: caratConditions
+      }).lean();
+    
+      if (caratMatchedProducts.length === 0) {
+        return res.status(200).json({
+          products: [],
+          message: "No products found for the selected carat.",
+          matchedFilters,
+          unmatchedFilters: { carat: caratValues }
+        });
+      }
+    
+      matchedFilters.carat = [...new Set(caratMatchedProducts.map(p => p.Carat))];
+      matchedProductIds = new Set(caratMatchedProducts.map(p => p._id));
+    
+      console.log("Matched carats:", matchedFilters.carat);
+    }
+
+    
+
+    // === STEP 3: COLOR FILTERING ===
+    if (filters.color) {
+      const colorValues = filters.color.split(",");
+      console.log(`Checking color: ${colorValues}`);
+
+      const colorMatchedProducts = await Product.find({
+        _id: { $in: [...matchedProductIds] },
+        Color: { $in: colorValues }
+      }).lean();
+
+      if (colorMatchedProducts.length === 0) {
+        return res.status(200).json({
+          products: [],
+          message: "No products found for the selected color.",
+          matchedFilters,
+          unmatchedFilters: { color: colorValues }
+        });
+      }
+
+      matchedFilters.color = [...new Set(colorMatchedProducts.map(p => p.Color))];
+      matchedProductIds = new Set(colorMatchedProducts.map(p => p._id));
+
+      console.log("Matched colors:", matchedFilters.color);
+    }
+
+    // === STEP 4: OTHER FILTERS (Clarity, Cut, etc.) ===
+    for (const [filterKey, filterValue] of Object.entries(filters)) {
+      if (["shape", "carat", "color"].includes(filterKey)) continue;
+
+      const mappedField = fieldMapping[filterKey];
+      if (!mappedField) continue;
+
+      console.log(`Checking ${filterKey}: ${filterValue}`);
+
+      const valuesArray = filterValue.split(",");
+      const matchedProducts = await Product.find({
+        _id: { $in: [...matchedProductIds] },
+        [mappedField]: { $in: valuesArray }
+      }).lean();
+
+      if (matchedProducts.length === 0) {
+        return res.status(200).json({
+          products: [],
+          message: `No products found for the selected ${filterKey}.`,
+          matchedFilters,
+          unmatchedFilters: { ...unmatchedFilters, [filterKey]: valuesArray }
+        });
+      }
+
+      matchedFilters[filterKey] = [...new Set(matchedProducts.map(p => p[mappedField]))];
+      matchedProductIds = new Set(matchedProducts.map(p => p._id));
+
+      console.log(`Matched ${filterKey}:`, matchedFilters[filterKey]);
+    }
+
+    // === FINAL RESULT ===
+    const finalProducts = await Product.find({ _id: { $in: [...matchedProductIds] } }).sort({ Carat: 1 }).lean();
+
+    if (finalProducts.length === 0) {
+      return res.status(200).json({
+        products: [],
+        message: "No matching products found.",
+        matchedFilters,
+        unmatchedFilters
+      });
+    }
+
+    return res.status(200).json({
+      products: finalProducts,
+      matchedFilters,
+      unmatchedFilters,
+      message: "Products found matching the filters."
+    });
+
   } catch (error) {
-    console.error("Error in fetching products:", error);
+    console.error("Error fetching products:", error);
     return res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 });
+
 
 
 
@@ -155,9 +282,9 @@ router.put('/edit-product/:productId', async (req, res) => {
 
     // Ensure productId is a valid ObjectId
     console.log('Received productId:', productId); // Debugging line
-if (!mongoose.Types.ObjectId.isValid(productId)) {
-  return res.status(400).json({ message: 'Invalid product ID' });
-}
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: 'Invalid product ID' });
+    }
 
 
     // Find the product by ID and ensure it's associated with the correct admin
@@ -171,20 +298,20 @@ if (!mongoose.Types.ObjectId.isValid(productId)) {
 
     // Validate numeric fields (as an example, adapt according to your schema)
     const numericFields = ['Carat', 'Length', 'Breadth', 'Height', 'Price/ct', 'Amount'];
-const optionalFields = ['BGM', 'H&C', '3EX'];
+    const optionalFields = ['BGM', 'H&C', '3EX'];
 
-for (const field of numericFields) {
-    if (product[field] === undefined || isNaN(product[field])) {
+    for (const field of numericFields) {
+      if (product[field] === undefined || isNaN(product[field])) {
         return res.status(400).json({ message: `Invalid value for ${field}. Must be a number.` });
+      }
     }
-}
 
-// Ensure optional fields can be empty
-optionalFields.forEach(field => {
-    if (!product[field]) {
+    // Ensure optional fields can be empty
+    optionalFields.forEach(field => {
+      if (!product[field]) {
         product[field] = "";
-    }
-});
+      }
+    });
 
 
     // Update the product with new data
@@ -254,24 +381,24 @@ router.delete('/delete-products', async (req, res) => {
 
 router.post('/delete-products-excel', async (req, res) => {
   try {
-      const { certificateNumbers } = req.body; 
+    const { certificateNumbers } = req.body;
 
-      if (!certificateNumbers || !Array.isArray(certificateNumbers) || certificateNumbers.length === 0) {
-          return res.status(400).json({ message: "No valid Certificate No found for deletion", deletedCount: 0 });
-      }
+    if (!certificateNumbers || !Array.isArray(certificateNumbers) || certificateNumbers.length === 0) {
+      return res.status(400).json({ message: "No valid Certificate No found for deletion", deletedCount: 0 });
+    }
 
-      // Delete products matching Certificate No
-      const result = await Product.deleteMany({ "Certificate No": { $in: certificateNumbers } });
+    // Delete products matching Certificate No
+    const result = await Product.deleteMany({ "Certificate No": { $in: certificateNumbers } });
 
-      if (result.deletedCount === 0) {
-          return res.status(404).json({ message: "Data is not present", deletedCount: 0 });
-      }
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: "Data is not present", deletedCount: 0 });
+    }
 
-      res.status(200).json({ message: `${result.deletedCount} products deleted successfully!`, deletedCount: result.deletedCount });
+    res.status(200).json({ message: `${result.deletedCount} products deleted successfully!`, deletedCount: result.deletedCount });
 
   } catch (error) {
-      console.error("Error in deleting products:", error);
-      res.status(500).json({ message: "Internal server error.", error: error.message, deletedCount: 0 });
+    console.error("Error in deleting products:", error);
+    res.status(500).json({ message: "Internal server error.", error: error.message, deletedCount: 0 });
   }
 });
 
