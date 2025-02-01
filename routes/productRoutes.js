@@ -112,15 +112,18 @@ router.get("/products", async (req, res) => {
       matchedProductIds = new Set(shapeMatchedProducts.map(p => p._id));
 
       console.log("Matched shapes:", matchedFilters.shape);
+    } else {
+      // If no shape filter is applied, fetch all products initially.
+      const allProducts = await Product.find({}).lean();
+      matchedProductIds = new Set(allProducts.map(p => p._id));
+      console.log("No shape filter. Checking all products.");
     }
 
     // === STEP 2: CARAT FILTERING (WITH RANGES) ===
-    // === STEP 2: CARAT FILTERING ===
     if (filters.carat) {
       const caratValues = filters.carat.split(",");
       console.log(`Checking carat: ${caratValues}`);
-    
-      // Define carat ranges based on your provided data
+
       const caratRanges = {
         '0.1': [0.1, 0.1499],
         '0.15': [0.15, 0.1999],
@@ -140,8 +143,7 @@ router.get("/products", async (req, res) => {
         '5': [5, 5.9999],
         '10': [10, 10.9999],
       };
-    
-      // Create carat range conditions based on the selected carats
+
       const caratConditions = caratValues.flatMap(value => {
         const range = caratRanges[value];
         if (range) {
@@ -149,7 +151,7 @@ router.get("/products", async (req, res) => {
         }
         return [];
       });
-    
+
       if (caratConditions.length === 0) {
         return res.status(200).json({
           products: [],
@@ -158,13 +160,12 @@ router.get("/products", async (req, res) => {
           unmatchedFilters: { carat: caratValues }
         });
       }
-    
-      // Find all products that match the selected carat ranges
+
       const caratMatchedProducts = await Product.find({
-        _id: { $in: [...matchedProductIds] }, // Only check previously matched shapes
+        _id: { $in: [...matchedProductIds] },
         $or: caratConditions
       }).lean();
-    
+
       if (caratMatchedProducts.length === 0) {
         return res.status(200).json({
           products: [],
@@ -173,14 +174,12 @@ router.get("/products", async (req, res) => {
           unmatchedFilters: { carat: caratValues }
         });
       }
-    
+
       matchedFilters.carat = [...new Set(caratMatchedProducts.map(p => p.Carat))];
       matchedProductIds = new Set(caratMatchedProducts.map(p => p._id));
-    
+
       console.log("Matched carats:", matchedFilters.carat);
     }
-
-    
 
     // === STEP 3: COLOR FILTERING ===
     if (filters.color) {
@@ -261,6 +260,7 @@ router.get("/products", async (req, res) => {
     return res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 });
+
 
 
 
