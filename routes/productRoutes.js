@@ -64,7 +64,7 @@ router.get('/products-details', async (req, res) => {
 router.get("/products", async (req, res) => {
   try {
     console.log("Received filters:", req.query);
-
+    const { page = 1, limit = 20 } = req.query;
     const filters = Object.keys(req.query).reduce((acc, key) => {
       acc[key] = decodeURIComponent(req.query[key]);
       return acc;
@@ -237,7 +237,10 @@ router.get("/products", async (req, res) => {
     }
 
     // === FINAL RESULT ===
-    const finalProducts = await Product.find({ _id: { $in: [...matchedProductIds] } }).sort({ Carat: 1 }).lean();
+    const finalProducts = await Product.find({ _id: { $in: [...matchedProductIds] } }).sort({ Carat: 1 }).skip((page - 1) * limit)
+    .limit(limit).lean();
+
+    const totalProducts = await Product.countDocuments({ _id: { $in: [...matchedProductIds] } });
 
     if (finalProducts.length === 0) {
       return res.status(200).json({
@@ -250,6 +253,7 @@ router.get("/products", async (req, res) => {
 
     return res.status(200).json({
       products: finalProducts,
+      totalProducts,
       matchedFilters,
       unmatchedFilters,
       message: "Products found matching the filters."
