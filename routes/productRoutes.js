@@ -1,8 +1,24 @@
 const express = require('express');
+require('dotenv').config();
 const router = express.Router();
 const Product = require('../models/products'); // Assuming Product model is correctly defined
 const mongoose = require('mongoose');
 const xlsx = require('xlsx');
+const CryptoJS = require('crypto-js');
+
+const decryptPayload = (encryptedPayload, secretKey) => {
+  try {
+    const bytes = CryptoJS.AES.decrypt(encryptedPayload, secretKey);
+    const decryptedText = bytes.toString(CryptoJS.enc.Utf8);
+    // console.log("Decrypted text:", decryptedText);  // Log the decrypted string
+    if (!decryptedText) throw new Error("Decryption failed or returned empty string");
+    return JSON.parse(decryptedText);
+  } catch (error) {
+    console.error("Decryption error:", error.message);
+    throw new Error("Decryption failed. Invalid payload.");
+  }
+};
+
 
 // Add Product - Admin only
 router.post('/add-product', async (req, res) => {
@@ -61,14 +77,28 @@ router.get('/products-details', async (req, res) => {
   }
 });
 
-router.get("/products", async (req, res) => {
+router.post("/products", async (req, res) => {
+  // console.log("Route /products hit");
   try {
-    console.log("Received filters:", req.query);
-    const { page = 1, limit = 20 } = req.query;
-    const filters = Object.keys(req.query).reduce((acc, key) => {
-      acc[key] = decodeURIComponent(req.query[key]);
-      return acc;
-    }, {});
+    const { encryptedQuery, page = 1, limit = 20 } = req.body;
+    // console.log("Received encrypted query:", encryptedQuery);
+    // console.log("Received request body:", req.body);
+
+
+    // Decrypt the query string
+    const query = decryptPayload(encryptedQuery, process.env.SECRET_KEY);
+// console.log("Decrypted query:", query);  // Log decrypted query
+
+// Check if query is valid JSON or object
+if (!query) {
+  return res.status(400).json({
+    message: "Invalid or empty decrypted query."
+  });
+}
+
+
+    // Parse the query string into an object
+    const filters = Object.fromEntries(new URLSearchParams(query));
 
     const fieldMapping = {
       shape: "Shape",
@@ -260,6 +290,7 @@ router.get("/products", async (req, res) => {
     });
 
   } catch (error) {
+    console.error("Error in /products route:", error);
     console.error("Error fetching products:", error);
     return res.status(500).json({ message: "Internal server error.", error: error.message });
   }
